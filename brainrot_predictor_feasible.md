@@ -13,8 +13,10 @@ To overcome this, this project frames the problem as an **Early Warning System (
 
 ## 2. Core Research Questions
 
-1. To what degree can low-frequency smartphone kinematic data (stillness, movement intensity) predict an impending drop in user focus?
-2. Does the inclusion of immediate system interaction history (app switching, frequency of other app opens) improve the precision of a short-horizon early warning behavioral model?
+1. **Predictability:** Can we predict brainrot time intervals? That is, using smartphone kinematic data (stillness, movement intensity) and system-interaction history aggregated over the current window, can we predict whether the user will enter a doomscrolling session in the subsequent window?
+2. **Transferability:** Does a learned algorithm transfer across people? If a model is trained on one user's data, does its predictive performance hold when applied to a different user who was not seen during training?
+
+> Note: RQ2 directly satisfies the assignment's evaluation requirement that generalization be measured on *another person* (or a new recording of the same person), rather than by randomly sampling time points from a single dataset.
 
 ---
 
@@ -43,6 +45,16 @@ To build a predictive early warning system, features computed during the current
 
 - **Class 1 (Susceptible State):** Assigned to the current 3-minute interval ($T$) if a verified target app-open event occurs during the next interval ($T+1$).
 - **Class 0 (Baseline State):** Assigned if no target app-open event occurs in the subsequent interval ($T+1$).
+
+---
+
+## 4b. Evaluation Strategy
+
+Per the assignment, the evaluation must measure **generalization**, never random time-point sampling within one continuous dataset (adjacent 3-minute blocks are autocorrelated, so a random split leaks information).
+
+- **RQ1 (Predictability):** Train and test on the *same* primary user, but split by **recording session / day**. Earlier recording sessions form the training set; held-out later sessions form the test set. This prevents temporal leakage between neighbouring windows.
+- **RQ2 (Transferability):** Train exclusively on the primary user (User A) and test on a **second user (User B)** whose data never appears in training. Performance is then compared against User B's own within-person baseline (a model trained and tested on User B alone) to quantify the transfer gap.
+- **Metrics:** Because Class 1 (susceptible) blocks are rare, report **PR-AUC, precision, recall, and F1** rather than raw accuracy, plus a confusion matrix. Establish a majority-class baseline for reference.
 
 ---
 
