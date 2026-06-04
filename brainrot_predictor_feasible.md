@@ -22,7 +22,7 @@ To overcome this, this project frames the problem as an **Early Warning System (
 
 ## 3. Data Collection Architecture
 
-The dataset is built using a dual-modal tracking approach across two distinct data layers:
+The dataset is collected by **all three project members**, each recording **continuously and in parallel** on their own iPhone from the start of the project until the final deadline. Three participants enable the cross-person (leave-one-person-out) evaluation that RQ2 requires. The dataset is built using a dual-modal tracking approach across two distinct data layers:
 
 | Data Layer | Primary Sensor | Sampling Frequency | Operational Rationale |
 | :--- | :--- | :--- | :--- |
@@ -53,7 +53,7 @@ To build a predictive early warning system, features computed during the current
 Per the assignment, the evaluation must measure **generalization**, never random time-point sampling within one continuous dataset (adjacent 3-minute blocks are autocorrelated, so a random split leaks information).
 
 - **RQ1 (Predictability):** Train and test on the *same* primary user, but split by **recording session / day**. Earlier recording sessions form the training set; held-out later sessions form the test set. This prevents temporal leakage between neighbouring windows.
-- **RQ2 (Transferability):** Train exclusively on the primary user (User A) and test on a **second user (User B)** whose data never appears in training. Performance is then compared against User B's own within-person baseline (a model trained and tested on User B alone) to quantify the transfer gap.
+- **RQ2 (Transferability):** Use a **leave-one-person-out** scheme across the three participants. Train on two users and test on the held-out third, whose data never appears in training. Performance is then compared against that user's own within-person baseline (a model trained and tested on them alone) to quantify the transfer gap.
 - **Metrics:** Because Class 1 (susceptible) blocks are rare, report **PR-AUC, precision, recall, and F1** rather than raw accuracy, plus a confusion matrix. Establish a majority-class baseline for reference.
 
 ---
@@ -70,13 +70,13 @@ Raw data streams are aggregated into 3-minute tabular blocks to generate the fol
 
 ### System & Interaction Features
 
-- **`other_apps_opened_count`:** The total number of non-target applications opened during the 3-minute window, acting as a proxy for attention fragmentation.
-- **`app_switch_frequency`:** The rate of transition between different baseline applications within the current block.
+- **`other_apps_opened_count`:** The total number of non-target applications opened during the 3-minute window, acting as a proxy for attention fragmentation. Auxiliary opens are tagged into four categories — **Search** (LLM assistants such as Gemini and Claude, and web browsers), **Social** (e.g., WhatsApp, Snapchat), **Entertainment** (e.g., Netflix, YouTube), and **Other** (anything else) — yielding per-category open counts as finer-grained features.
+- **`app_switch_frequency`:** The rate of transition between different app categories within the current block.
 
 ### Contextual and Temporal Anchors
 
 - **`time_of_day_sin` / `time_of_day_cos`:** Cyclical trigonometric transformations of the 24-hour clock to map circadian vulnerabilities without creating a hard boundary discontinuity at midnight.
-- **`time_since_last_scroll`:** A continuous timer mapping the time elapsed since the last recorded target app closure, defining the behavioral refractory period of dopamine cravings.
+- **`time_since_last_target_open`:** A continuous timer mapping the time elapsed since the last recorded target app-open event (TikTok/Instagram). Because iOS Shortcuts can only log app *open* events ("Is Opened") and cannot reliably detect app *close*, this feature is anchored on opens rather than closures. It captures the behavioral refractory period between doomscrolling bouts.
 
 ---
 
@@ -90,12 +90,12 @@ To log app-open events into a clean dataset without manual tracking:
 2. **For Target Apps:** Click the **+** icon and select **App**. Choose **Instagram** and **TikTok**, check **Is Opened**, and select **Run Immediately**.
 3. In the action workspace, select **Add Action** and search for **Text**. Type the template: `Current Date, Target_Open`.
 4. Search for the **Append to Text File** action. Set it to append the output text into a file named `brainrot_tracker.csv` inside your Shortcuts folder on iCloud Drive.
-5. **For Auxiliary Apps:** Create identical automations for other high-frequency apps (e.g., Messages, Mail, Safari) that write to the same CSV file with the format `Current Date, Aux_Open` to populate the attention fragmentation features.
+5. **For Auxiliary Apps:** Create one automation **per category** (four total), each multi-selecting the apps that belong to it, writing to the same CSV file with a category-specific tag: `Current Date, Search_Open` (LLM assistants such as Gemini/Claude and browsers), `Current Date, Social_Open` (e.g., WhatsApp, Snapchat), `Current Date, Entertainment_Open` (e.g., Netflix, YouTube), and `Current Date, Other_Open` (anything else). The Phone app is deliberately excluded, as calling behaviour is not expected to correlate with scrolling onset.
 
 ### Step 2: Recording Background Phone Motion Data
 
 1. Download a sensor logging application that supports persistent background recording threads (e.g., **Sensor Logger**).
 2. Configure the app settings to log the **Gyroscope** and **Accelerometer** at a hardware sampling frequency of **5 Hz** or **10 Hz**.
 3. Enable **Background Recording** within the application settings, granting "Always Allow" location permissions if prompted (this forces iOS to keep the sensor polling thread active when the screen is locked or another app is active).
-4. Manually start the logging session at the beginning of a designated study or work interval, and export the resulting continuous CSV at the end of the session to align with the Shortcuts event logs via timestamps during Python preprocessing.
+4. Record **continuously** for the full duration of the study (not just designated work intervals), periodically exporting the resulting CSV to align with the Shortcuts event logs via timestamps during Python preprocessing.
 

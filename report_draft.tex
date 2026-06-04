@@ -1,0 +1,244 @@
+\documentclass[runningheads]{llncs}
+
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\begin{document}
+
+\title{The Brainrot Tracker: An Early Warning System for Doomscroll Susceptibility from Smartphone Kinematics and Interaction Behaviour}
+
+\author{Author One \and Author Two \and Author Three}
+
+\authorrunning{Author One et al.}
+
+\institute{Vrije Universiteit Amsterdam, Amsterdam, The Netherlands}
+
+\maketitle
+
+\begin{abstract}
+Compulsive engagement with algorithmic short-form video applications is a pervasive
+behavioural phenomenon linked to cognitive fatigue, stress, and boredom. This paper
+presents the \emph{Brainrot Tracker}, a dual-modal Early Warning System (EWS) that
+predicts whether a user is about to initiate a doomscrolling session in the next
+three-minute window. We continuously collect high-frequency smartphone kinematic data
+(accelerometer and gyroscope at 10\,Hz) together with event-driven system-interaction logs
+(target and auxiliary application launches) from three participants over the full duration
+of the study. Each three-minute block is aggregated into engineered features, reframing the
+extreme class-imbalance problem of precise event prediction as a tractable binary
+classification task. We compare a classical gradient-boosted model against a temporal deep
+learning model, and---crucially---assess generalisation \emph{across people} by training on
+a subset of participants and testing on a held-out individual. <describe headline results>
+
+\keywords{Quantified Self \and Behavioural Prediction \and Early Warning Systems \and
+Time-Series Classification \and Deep Learning}
+\end{abstract}
+
+
+% -----------------------------------------------------------------------
+\section{Research Question and Data}\label{sec:intro}
+% -----------------------------------------------------------------------
+
+\subsection{Problem Statement}
+
+Short form video content is increasingly prevelant in the lives of the younger generation. It is rarely a pre-planned activity like other hobbies, but rather "doomscrolling" sessions arise seemingly out of coincidental circumstances. Our tracker aims to leverage data to predict when a user is about to open a short form video content app. While predicting the \emph{exact} second a user opens one of these applications is unfeasable as a machine learning problem, with the positive class (app opened)
+representing fewer than 0.1\% of all observations in a continuous monitoring dataset -
+producing severe class imbalance, we can reframe the problem as an \textbf{Early Warning System (EWS)}. Rather than predicting
+the precise moment of failure, the model predicts whether a user is in a
+\emph{Susceptibility Window} - a three-minute block immediately preceding a doomscrolling
+session. This formulation is both more tractable
+and more practically useful: a short warning horizon is still long enough for a behavioural
+intervention (e.g.\ a mindfulness prompt or app lock) to be effective - ideally increasing the users awareness of the behavioural patterns that lead to this destructive behaviour.
+
+\subsection{Research Questions}
+
+This project is structured around two core research questions:
+
+\begin{enumerate}
+    \item \textbf{Predictability.} Can we predict brainrot time intervals? That is, using
+          smartphone kinematic data (stillness, movement intensity) and system-interaction
+          history aggregated over the current window, can we predict whether a user will
+          enter a doomscrolling session in the subsequent window?
+    \item \textbf{Transferability.} Does a learned model transfer across people? If a model
+          is trained on some users' data, does its predictive performance hold when applied
+          to a different user who was never seen during training?
+\end{enumerate}
+
+The second question directly satisfies the assignment's requirement that generalisation be
+measured on \emph{another person}, rather than by randomly sampling time points from a
+single dataset.
+
+\subsection{Prediction Target}
+
+The binary classification target is defined by a rolling three-minute look-ahead window
+applied to the continuous time-series. Features computed during the current interval ($T$)
+are mapped to a label derived from the subsequent interval ($T{+}1$). A block is assigned
+\textbf{Class 1} (Susceptible State) if a verified TikTok or Instagram app-open event occurs
+during the next three-minute interval, and \textbf{Class 0} (Baseline State) otherwise. This
+window size was selected to balance label prevalence against the responsiveness of the
+warning.
+
+\subsection{Data Sources and Measurements}
+
+Data are collected across two complementary modalities using the mobile devices of all
+three authors. Each author records \emph{continuously and in parallel}, from the start of
+the project until the final deadline, so that data accrues without interruption throughout
+the study. Collecting from three participants additionally enables a cross-person evaluation
+of model generalisation (Section~\ref{sec:eval}). Table~\ref{tab:data_layers} summarises the
+sensors, sampling frequencies, and rationale for each layer.
+
+\begin{table}[t]
+\caption{Dual-modal data collection architecture.}\label{tab:data_layers}
+\begin{tabular}{@{}p{2.6cm}p{2.8cm}p{1.8cm}p{4.6cm}@{}}
+\toprule
+\textbf{Data Layer} & \textbf{Primary Sensor} & \textbf{Frequency} & \textbf{Rationale} \\
+\midrule
+Kinematic           & iPhone Accelerometer \& Gyroscope (Sensor Logger) & 10 Hz &
+    Tracks macroscopic movements and phone placement. Prolonged physical stillness indicates
+    a sedentary position, raising the baseline probability of phone engagement, while sudden
+    spikes capture pickup gestures. \\
+\addlinespace
+System \& Target    & iOS Shortcuts (event-driven) & On launch &
+    Automates ground-truth timestamp logging for target app opens (TikTok, Instagram) and
+    for auxiliary app opens used as behavioural features. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Kinematic Layer.}
+The iPhone's internal accelerometer and gyroscope are logged at 10\,Hz using the Sensor
+Logger application, which supports persistent background recording so that motion is
+captured even when the screen is locked or another app is in the foreground. The primary
+derived signal is \emph{phone stillness duration}: a running counter measuring how long the
+composite gyroscope variance has remained below a static threshold. Extended stillness is a
+behavioural precursor to distraction-seeking. A low sampling frequency is sufficient here:
+it captures pickup gestures and restlessness while keeping data volume manageable.
+
+\paragraph{System and Target Layer.}
+iOS Shortcuts automate the logging of two event types to a shared CSV file on iCloud Drive:
+(1) every launch of TikTok or Instagram (the classification target), and (2) every launch of
+an auxiliary (non-target) application, tagged at log time with one of four categories:
+\emph{Search} (LLM assistants such as Gemini and Claude, and web browsers),
+\emph{Social} (e.g.\ WhatsApp and Snapchat),
+\emph{Entertainment} (e.g.\ Netflix and YouTube), and
+\emph{Other} (any remaining application). These auxiliary opens serve as proxies for
+attention fragmentation. The Phone app is excluded, as calling behaviour is not expected to
+correlate with scrolling onset. This provides precise, automated ground-truth labels and
+behavioural features without manual annotation. Because iOS automations can only fire on app
+\emph{open} (not \emph{close}), all event-driven features are anchored on open events.
+
+\subsection{Engineered Features}
+
+Raw sensor streams are aggregated into three-minute tabular blocks to produce the following
+features.
+
+\paragraph{Kinematic features.}
+\begin{itemize}
+    \item \texttt{phone\_stillness\_duration} --- seconds for which the composite gyroscope
+          variance stayed below a strict static threshold.
+    \item \texttt{gyro\_max\_vector} --- magnitude of the single largest angular-velocity
+          spike in the window, capturing rapid actions such as picking up the device.
+    \item \texttt{gyro\_variance} --- variance of the gyroscope signal over the window, a
+          proxy for user restlessness.
+\end{itemize}
+
+\paragraph{System and interaction features.}
+\begin{itemize}
+    \item \texttt{other\_apps\_opened\_count} --- total auxiliary opens in the window, plus
+          per-category counts (\emph{Search}, \emph{Social}, \emph{Entertainment},
+          \emph{Other}) as finer-grained attention-fragmentation signals.
+    \item \texttt{app\_switch\_frequency} --- rate of transitions between distinct app
+          categories within the block.
+\end{itemize}
+
+\paragraph{Contextual and temporal anchors.}
+\begin{itemize}
+    \item \texttt{time\_of\_day\_sin} / \texttt{time\_of\_day\_cos} --- cyclical encoding of
+          the 24-hour clock, mapping circadian vulnerability without a midnight discontinuity.
+    \item \texttt{time\_since\_last\_target\_open} --- seconds since the last target app-open
+          event, capturing the behavioural refractory period between doomscrolling bouts
+          (anchored on opens, since closes cannot be logged).
+\end{itemize}
+
+\subsection{Evaluation Strategy}\label{sec:eval}
+
+The evaluation is designed to measure \emph{generalisation}, never random time-point sampling
+within a single continuous recording: adjacent three-minute blocks are autocorrelated, so a
+random split would leak information between train and test sets.
+
+\begin{itemize}
+    \item \textbf{RQ1 (Predictability).} Train and test on the same user, but split by
+          \emph{recording session / day} --- earlier sessions train, held-out later sessions
+          test --- preventing temporal leakage between neighbouring windows.
+    \item \textbf{RQ2 (Transferability).} Use a leave-one-person-out scheme across the three
+          participants: train on two users and test on the held-out third, whose data never
+          appears in training. Performance is compared against that user's own within-person
+          baseline to quantify the transfer gap.
+    \item \textbf{Metrics.} Because Class~1 (susceptible) blocks are rare, we report PR-AUC,
+          precision, recall, and F1 with a confusion matrix, relative to a majority-class
+          baseline, rather than raw accuracy.
+\end{itemize}
+
+% -----------------------------------------------------------------------
+\section{Data Collection and Exploratory Analysis}\label{sec:eda}
+% -----------------------------------------------------------------------
+
+% TODO (Deadline 1): Summarise collected data. Report data volumes, class
+% distributions, basic statistics per feature, and time-series plots.
+% Discuss resolution choices (e.g. window size, resampling rate).
+
+
+% -----------------------------------------------------------------------
+\section{Noise Removal and Missing Value Handling}\label{sec:noise}
+% -----------------------------------------------------------------------
+
+% TODO (Deadline 1): Document preprocessing steps. Justify chosen
+% interpolation, smoothing, or imputation techniques with reference to
+% Chapter 3 of the book. Discuss edge cases (sensor dropout, sync lag).
+
+
+% -----------------------------------------------------------------------
+\section{Feature Engineering}\label{sec:features}
+% -----------------------------------------------------------------------
+
+% TODO (Deadline 2): Expand on the feature set defined in Section 1.
+% Include ablation analysis or feature importance scores to justify the
+% final feature set. Reference Chapter 4 of the book.
+
+
+% -----------------------------------------------------------------------
+\section{Classical Machine Learning}\label{sec:classical}
+% -----------------------------------------------------------------------
+
+% TODO (Deadline 2): Define train/test split. Apply classifiers (e.g.
+% XGBoost, Random Forest, SVM). Report hyperparameter optimisation (e.g.
+% grid search, cross-validation). Discuss results with reference to
+% Chapter 7 of the book.
+
+
+% -----------------------------------------------------------------------
+\section{Deep Learning}\label{sec:deep}
+% -----------------------------------------------------------------------
+
+% TODO (Final): Apply a temporal deep learning model (e.g. LSTM, TCN) on
+% the raw 10 Hz sequences. Justify architecture and hyperparameter choices.
+% Compare against classical results from Section~\ref{sec:classical}.
+
+
+% -----------------------------------------------------------------------
+\section{Conclusion and Critical Reflection}\label{sec:conclusion}
+% -----------------------------------------------------------------------
+
+% TODO (Final): Summarise findings across both modelling approaches.
+% Critically reflect on limitations: data quantity, single-user bias,
+% sensor reliability, label quality, and potential confounds.
+
+
+% ---- Bibliography ----
+\begin{thebibliography}{8}
+
+
+
+\end{thebibliography}
+
+\end{document}
